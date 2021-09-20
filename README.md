@@ -60,12 +60,16 @@ A maintenance workflow that you can deploy into Airflow to periodically clean ou
 
 #### airflow-log-cleanup.py
 
-1. Copy the airflow-log-cleanup.py file to this dags directory
-<!-- TODO: REPLACE-->
-
-       a. Here's a fast way:
-
-                $ wget https://raw.githubusercontent.com/teamclairvoyant/airflow-maintenance-dags/master/log-cleanup/airflow-log-cleanup.py
+1. Copy the airflow-log-cleanup.py file to this dags directory. Here's a fast way:  
+   1. Production:
+   ```
+   $ wget https://raw.githubusercontent.com/oneaudience/airflow-maintenance-dags/master/src/dags/airflow_log_cleanup.py
+   ```
+   2. Development:
+   ```
+   $ wget https://raw.githubusercontent.com/oneaudience/airflow-maintenance-dags/develop/src/dags/airflow_log_cleanup.py
+   ```
+   
 
 2. Update the global variables (SCHEDULE_INTERVAL, DAG_OWNER_NAME, ALERT_EMAIL_ADDRESSES, ENABLE_DELETE and NUMBER_OF_WORKERS) in the DAG with the desired values
 
@@ -87,12 +91,15 @@ A maintenance workflow that you can deploy into Airflow to periodically clean ou
 
 2. Navigate to the dags directory
 
-3. Copy the airflow-db-cleanup.py file to this dags directory
-
-<!-- TODO: REPLACE-->
-       a. Here's a fast way:
-
-                $ wget https://raw.githubusercontent.com/teamclairvoyant/airflow-maintenance-dags/master/db-cleanup/airflow-db-cleanup.py
+3. Copy the airflow-db-cleanup.py file to this dags directory. Here's a fast way:  
+   1. Production:
+   ```
+   $ wget https://raw.githubusercontent.com/oneaudience/airflow-maintenance-dags/master/src/dags/airflow_db_cleanup.py
+   ```
+   2. Development:
+   ```
+   $ wget https://raw.githubusercontent.com/oneaudience/airflow-maintenance-dags/develop/src/dags/airflow_db_cleanup.py
+   ```
         
 4. Update the global variables (SCHEDULE_INTERVAL, DAG_OWNER_NAME, ALERT_EMAIL_ADDRESSES and ENABLE_DELETE) in the DAG with the desired values
 
@@ -120,12 +127,15 @@ A maintenance workflow that you can deploy into Airflow to periodically clean ou
 
 2. Navigate to the dags directory
 
-3. Copy the airflow-clear-missing-dags.py file to this dags directory
-
-<!-- TODO: REPLACE-->
-       a. Here's a fast way:
-
-                $ wget https://raw.githubusercontent.com/teamclairvoyant/airflow-maintenance-dags/master/clear-missing-dags/airflow-clear-missing-dags.py
+3. Copy the airflow-clear-missing-dags.py file to this dags directory. Here's a fast way:  
+   1. Production:
+   ```
+   $ wget https://raw.githubusercontent.com/oneaudience/airflow-maintenance-dags/master/src/dags/airflow_clear_missing_dags.py
+   ```
+   2. Development:
+   ```
+   $ wget https://raw.githubusercontent.com/oneaudience/airflow-maintenance-dags/develop/src/dags/airflow_clear_missing_dags.py
+   ```
         
 5. Update the global variables (SCHEDULE_INTERVAL, DAG_OWNER_NAME, ALERT_EMAIL_ADDRESSES and ENABLE_DELETE) in the DAG with the desired values
 
@@ -144,12 +154,15 @@ This is useful because when you kill off a DAG Run or Task through the Airflow W
 
 2. Navigate to the dags directory
 
-3. Copy the airflow-kill-halted-tasks.py file to this dags directory
-<!-- TODO: REPLACE-->
-
-       a. Here's a fast way:
-
-                $ wget https://raw.githubusercontent.com/teamclairvoyant/airflow-maintenance-dags/master/kill-halted-tasks/airflow-kill-halted-tasks.py
+3. Copy the airflow-kill-halted-tasks.py file to this dags directory. Here's a fast way:  
+   1. Production:
+   ```
+   $ wget https://raw.githubusercontent.com/oneaudience/airflow-maintenance-dags/master/src/dags/airflow_kill_halted_tasks.py
+   ```
+   2. Development:
+   ```
+   $ wget https://raw.githubusercontent.com/oneaudience/airflow-maintenance-dags/develop/src/dags/airflow_kill_halted_tasks.py
+   ```
         
 4. Update the global variables in the DAG with the desired values 
 
