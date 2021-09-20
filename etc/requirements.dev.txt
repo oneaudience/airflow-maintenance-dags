@@ -1,0 +1,2 @@
+# Airflow
+apache-airflow[crypto,celery,postgres,s3,ssh,sendgrid]==1.10.14
