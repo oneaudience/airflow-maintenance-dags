@@ -16,6 +16,7 @@ A series of DAGs to help maintain and clean up after the operations of an Airflo
 
 ## Setup
 
+### Python Setup
 To set up the environment for testing, you must run the following commands
 ```
 python3 -m venv venv
@@ -24,6 +25,24 @@ pip install --upgrade pip
 pip install -r etc/requirements.dev.txt
 ```
 
+### Unit tests
+#### First-Time Setup
+If Airflow verson ~= 1.x:
+```
+airflow initdb
+```
+
+If Airflow verson >= 2.x:
+```
+airflow db init
+```
+
+Once the Airflow DB has been set up properly, we can run the unit tests:
+```
+export AIRFLOW_HOME=$PWD/src
+export PYTHONPATH=$PWD/src
+pytest test --cov src
+```
 
 
 ## Airflow Log Cleanup
@@ -42,6 +61,7 @@ A maintenance workflow that you can deploy into Airflow to periodically clean ou
 #### airflow-log-cleanup.py
 
 1. Copy the airflow-log-cleanup.py file to this dags directory
+<!-- TODO: REPLACE-->
 
        a. Here's a fast way:
 
@@ -69,6 +89,7 @@ A maintenance workflow that you can deploy into Airflow to periodically clean ou
 
 3. Copy the airflow-db-cleanup.py file to this dags directory
 
+<!-- TODO: REPLACE-->
        a. Here's a fast way:
 
                 $ wget https://raw.githubusercontent.com/teamclairvoyant/airflow-maintenance-dags/master/db-cleanup/airflow-db-cleanup.py
@@ -101,13 +122,14 @@ A maintenance workflow that you can deploy into Airflow to periodically clean ou
 
 3. Copy the airflow-clear-missing-dags.py file to this dags directory
 
+<!-- TODO: REPLACE-->
        a. Here's a fast way:
 
                 $ wget https://raw.githubusercontent.com/teamclairvoyant/airflow-maintenance-dags/master/clear-missing-dags/airflow-clear-missing-dags.py
         
-4. Update the global variables (SCHEDULE_INTERVAL, DAG_OWNER_NAME, ALERT_EMAIL_ADDRESSES and ENABLE_DELETE) in the DAG with the desired values
+5. Update the global variables (SCHEDULE_INTERVAL, DAG_OWNER_NAME, ALERT_EMAIL_ADDRESSES and ENABLE_DELETE) in the DAG with the desired values
 
-5. Enable the DAG in the Airflow Webserver
+6. Enable the DAG in the Airflow Webserver
 
 
 ## Airflow Kill Halted Tasks
@@ -123,6 +145,7 @@ This is useful because when you kill off a DAG Run or Task through the Airflow W
 2. Navigate to the dags directory
 
 3. Copy the airflow-kill-halted-tasks.py file to this dags directory
+<!-- TODO: REPLACE-->
 
        a. Here's a fast way:
 
@@ -131,3 +154,21 @@ This is useful because when you kill off a DAG Run or Task through the Airflow W
 4. Update the global variables in the DAG with the desired values 
 
 5. Enable the DAG in the Airflow Webserver
+
+
+### Common Issues
+
+#### "Table dag_stats already exists" While Running Unit Tests
+
+*Solution: Delete the configured .db file in src/unittests.cfg*
+
+1. Find unit testing db file
+```shell
+$ cat src/unittests.cfg | grep sql_alchemy_conn
+sql_alchemy_conn = sqlite:///$AIRFLOW_HOME/unittests.db
+```
+
+2. Delete the file from the specified path
+```shell
+rm $AIRFLOW_HOME/unittests.db
+```

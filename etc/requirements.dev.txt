@@ -1,2 +1,13 @@
 # Airflow
 apache-airflow[crypto,celery,postgres,s3,ssh,sendgrid]==1.10.14
+Flask~=1.1.2
+Flask-SQLAlchemy~=2.5.1
+SQLAlchemy~=1.3.8
+
+# Testing
+pytest~=6.2.2
+pytest-cov~=2.11.1
+pytest-mock~=3.5.1
+pyfakefs~=4.4.0
+moto~=2.0.4
+testfixtures~=6.18.1

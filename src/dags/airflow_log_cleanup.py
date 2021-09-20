@@ -1,230 +1,111 @@
-"""
-A maintenance workflow that you can deploy into Airflow to periodically clean
-out the task logs to avoid those getting too big.
-airflow trigger_dag --conf '[curly-braces]"maxLogAgeInDays":30[curly-braces]' airflow-log-cleanup
---conf options:
-    maxLogAgeInDays:<INT> - Optional
-"""
-import logging
 import os
-from datetime import timedelta
+from datetime import datetime, timedelta
+from pathlib import Path
 
-import airflow
-import jinja2
-from airflow.configuration import conf
-from airflow.models import DAG, Variable
-from airflow.operators.bash_operator import BashOperator
-from airflow.operators.dummy_operator import DummyOperator
+from airflow import DAG
+from airflow.operators.python_operator import PythonOperator, ShortCircuitOperator
 
-# airflow-log-cleanup
-DAG_ID = os.path.basename(__file__).replace(".pyc", "").replace(".py", "")
-START_DATE = airflow.utils.dates.days_ago(1)
-try:
-    BASE_LOG_FOLDER = conf.get("core", "BASE_LOG_FOLDER").rstrip("/")
-except Exception as e:
-    BASE_LOG_FOLDER = conf.get("logging", "BASE_LOG_FOLDER").rstrip("/")
-# How often to Run. @daily - Once a day at Midnight
-SCHEDULE_INTERVAL = "@daily"
-# Who is listed as the owner of this DAG in the Airflow Web Server
-DAG_OWNER_NAME = "operations"
-# List of email address to send email alerts to if this job fails
-ALERT_EMAIL_ADDRESSES = []
-# Length to retain the log files if not already provided in the conf. If this
-# is set to 30, the job will remove those files that are 30 days old or older
-DEFAULT_MAX_LOG_AGE_IN_DAYS = Variable.get(
-    "airflow_log_cleanup__max_log_age_in_days", 30
-)
-# Whether the job should delete the logs or not. Included if you want to
-# temporarily avoid deleting the logs
-ENABLE_DELETE = True
-# The number of worker nodes you have in Airflow. Will attempt to run this
-# process for however many workers there are so that each worker gets its
-# logs cleared.
-NUMBER_OF_WORKERS = 1
-DIRECTORIES_TO_DELETE = [BASE_LOG_FOLDER]
-ENABLE_DELETE_CHILD_LOG = Variable.get(
-    "airflow_log_cleanup__enable_delete_child_log", "False"
-)
-LOG_CLEANUP_PROCESS_LOCK_FILE = "/tmp/airflow_log_cleanup_worker.lock"
-logging.info("ENABLE_DELETE_CHILD_LOG  " + ENABLE_DELETE_CHILD_LOG)
+import settings
 
-if not BASE_LOG_FOLDER or BASE_LOG_FOLDER.strip() == "":
-    raise ValueError(
-        "BASE_LOG_FOLDER variable is empty in airflow.cfg. It can be found "
-        "under the [core] (<2.0.0) section or [logging] (>=2.0.0) in the cfg file. "
-        "Kindly provide an appropriate directory path."
+XCOM_LOG_FILES_KEY = 'log_files_to_delete'
+
+
+def x_days_ago(dt, num_days):
+    """
+    Returns a new date that is num_months before the specified date
+
+    :param dt: date to modify
+    :param num_days: number of days to subtract
+    :type dt: datetime
+    :type num_days: int
+    :return: dt - num_months
+    :rtype: datetime
+    """
+    return dt - timedelta(days=num_days)
+
+
+def check_for_old_log_files(xcom_key, max_age, **context):
+    """
+    Check if there are log files older than the specified number of days
+
+    :param xcom_key: xcom key to store the files to delete under
+    :param max_age: maximum age of a log file in days
+    :param context: context with the Airflow DAG
+    :type xcom_key: str
+    :type max_age: int
+    """
+    log = context['ti'].log
+    files_to_delete = []
+    older_than_date = x_days_ago(datetime.utcnow(), max_age)
+
+    log.info(f'Looking for log files older than {older_than_date}')
+    # We use os.walk instead of os.listdir because there may be subdirectories
+    # This avoids adding a directory name to the list of files to delete
+    for root, _, files in os.walk(settings.LOG_DIR):
+        for filename in files:
+            file_name = os.path.join(root, filename)
+            last_modified_time = datetime.fromtimestamp(Path(file_name).stat().st_mtime)
+            if last_modified_time <= older_than_date:
+                files_to_delete.append(file_name)
+
+    if files_to_delete:
+        log.info(f'Found {len(files_to_delete)} files marked to delete')
+        context['ti'].xcom_push(key=xcom_key, value=files_to_delete)
+        return True
+
+    log.info('No files found to delete')
+    return False
+
+
+def delete_files(xcom_keys, **context):
+    """
+    Deletes all local files stored in xcom_keys
+
+    :param xcom_keys: xcom key to pull the files to delete from
+    :param context: context with the Airflow DAG
+    :type xcom_keys: list[str]
+    """
+    log = context['ti'].log
+    files_to_delete = []
+    for xcom_key in xcom_keys:
+        xcom_files = context['ti'].xcom_pull(key=xcom_key)
+        if xcom_files:
+            files_to_delete.extend(xcom_files)
+
+    log.info(f'Deleting {len(files_to_delete)} files')
+    for file_path in files_to_delete:
+        if os.path.exists(file_path):
+            os.remove(file_path)
+            log.info(f'Deleted {file_path}')
+        else:
+            log.warning(f'File, {file_path}, does not exist!')
+
+    log.info('All files deleted')
+
+
+with DAG(
+        dag_id='airflow_log_cleanup',
+        start_date=datetime(2021, 9, 1),
+        schedule_interval='@monthly',
+        catchup=False,
+        tags=['airflow-maintenance-dags'],
+) as log_cleanup_dag:
+    check_old_log_files = ShortCircuitOperator(
+        task_id='check_old_log_files',
+        provide_context=True,
+        python_callable=check_for_old_log_files,
+        op_kwargs={
+            'xcom_key': XCOM_LOG_FILES_KEY,
+            'max_age': settings.MAX_LOG_FILE_AGE,
+        },
+    )
+    delete_old_log_files = PythonOperator(
+        task_id='delete_old_log_files',
+        provide_context=True,
+        python_callable=delete_files,
+        op_kwargs={
+            'xcom_keys': [XCOM_LOG_FILES_KEY],
+        },
     )
 
-if ENABLE_DELETE_CHILD_LOG.lower() == "true":
-    try:
-        CHILD_PROCESS_LOG_DIRECTORY = conf.get(
-            "scheduler", "CHILD_PROCESS_LOG_DIRECTORY"
-        )
-        if CHILD_PROCESS_LOG_DIRECTORY != ' ':
-            DIRECTORIES_TO_DELETE.append(CHILD_PROCESS_LOG_DIRECTORY)
-    except Exception as e:
-        logging.exception(
-            "Could not obtain CHILD_PROCESS_LOG_DIRECTORY from " +
-            "Airflow Configurations: " + str(e)
-        )
-
-default_args = {
-    'owner': DAG_OWNER_NAME,
-    'depends_on_past': False,
-    'email': ALERT_EMAIL_ADDRESSES,
-    'email_on_failure': True,
-    'email_on_retry': False,
-    'start_date': START_DATE,
-    'retries': 1,
-    'retry_delay': timedelta(minutes=1)
-}
-
-dag = DAG(
-    DAG_ID,
-    default_args=default_args,
-    schedule_interval=SCHEDULE_INTERVAL,
-    start_date=START_DATE,
-    tags=['teamclairvoyant', 'airflow-maintenance-dags'],
-    template_undefined=jinja2.Undefined
-)
-if hasattr(dag, 'doc_md'):
-    dag.doc_md = __doc__
-if hasattr(dag, 'catchup'):
-    dag.catchup = False
-
-start = DummyOperator(
-    task_id='start',
-    dag=dag)
-
-log_cleanup = """
-
-echo "Getting Configurations..."
-BASE_LOG_FOLDER="{{params.directory}}"
-WORKER_SLEEP_TIME="{{params.sleep_time}}"
-
-sleep ${WORKER_SLEEP_TIME}s
-
-MAX_LOG_AGE_IN_DAYS="{{dag_run.conf.maxLogAgeInDays}}"
-if [ "${MAX_LOG_AGE_IN_DAYS}" == "" ]; then
-    echo "maxLogAgeInDays conf variable isn't included. Using Default '""" + str(DEFAULT_MAX_LOG_AGE_IN_DAYS) + """'."
-    MAX_LOG_AGE_IN_DAYS='""" + str(DEFAULT_MAX_LOG_AGE_IN_DAYS) + """'
-fi
-ENABLE_DELETE=""" + str("true" if ENABLE_DELETE else "false") + """
-echo "Finished Getting Configurations"
-echo ""
-
-echo "Configurations:"
-echo "BASE_LOG_FOLDER:      '${BASE_LOG_FOLDER}'"
-echo "MAX_LOG_AGE_IN_DAYS:  '${MAX_LOG_AGE_IN_DAYS}'"
-echo "ENABLE_DELETE:        '${ENABLE_DELETE}'"
-
-cleanup() {
-    echo "Executing Find Statement: $1"
-    FILES_MARKED_FOR_DELETE=`eval $1`
-    echo "Process will be Deleting the following File(s)/Directory(s):"
-    echo "${FILES_MARKED_FOR_DELETE}"
-    echo "Process will be Deleting `echo "${FILES_MARKED_FOR_DELETE}" | \
-    grep -v '^$' | wc -l` File(s)/Directory(s)"     \
-    # "grep -v '^$'" - removes empty lines.
-    # "wc -l" - Counts the number of lines
-    echo ""
-    if [ "${ENABLE_DELETE}" == "true" ];
-    then
-        if [ "${FILES_MARKED_FOR_DELETE}" != "" ];
-        then
-            echo "Executing Delete Statement: $2"
-            eval $2
-            DELETE_STMT_EXIT_CODE=$?
-            if [ "${DELETE_STMT_EXIT_CODE}" != "0" ]; then
-                echo "Delete process failed with exit code \
-                    '${DELETE_STMT_EXIT_CODE}'"
-
-                echo "Removing lock file..."
-                rm -f """ + str(LOG_CLEANUP_PROCESS_LOCK_FILE) + """
-                if [ "${REMOVE_LOCK_FILE_EXIT_CODE}" != "0" ]; then
-                    echo "Error removing the lock file. \
-                    Check file permissions.\
-                    To re-run the DAG, ensure that the lock file has been \
-                    deleted (""" + str(LOG_CLEANUP_PROCESS_LOCK_FILE) + """)."
-                    exit ${REMOVE_LOCK_FILE_EXIT_CODE}
-                fi
-                exit ${DELETE_STMT_EXIT_CODE}
-            fi
-        else
-            echo "WARN: No File(s)/Directory(s) to Delete"
-        fi
-    else
-        echo "WARN: You're opted to skip deleting the File(s)/Directory(s)!!!"
-    fi
-}
-
-
-if [ ! -f """ + str(LOG_CLEANUP_PROCESS_LOCK_FILE) + """ ]; then
-
-    echo "Lock file not found on this node! \
-    Creating it to prevent collisions..."
-    touch """ + str(LOG_CLEANUP_PROCESS_LOCK_FILE) + """
-    CREATE_LOCK_FILE_EXIT_CODE=$?
-    if [ "${CREATE_LOCK_FILE_EXIT_CODE}" != "0" ]; then
-        echo "Error creating the lock file. \
-        Check if the airflow user can create files under tmp directory. \
-        Exiting..."
-        exit ${CREATE_LOCK_FILE_EXIT_CODE}
-    fi
-
-    echo ""
-    echo "Running Cleanup Process..."
-
-    FIND_STATEMENT="find ${BASE_LOG_FOLDER}/*/* -type f -mtime \
-     +${MAX_LOG_AGE_IN_DAYS}"
-    DELETE_STMT="${FIND_STATEMENT} -exec rm -f {} \;"
-
-    cleanup "${FIND_STATEMENT}" "${DELETE_STMT}"
-    CLEANUP_EXIT_CODE=$?
-
-    FIND_STATEMENT="find ${BASE_LOG_FOLDER}/*/* -type d -empty"
-    DELETE_STMT="${FIND_STATEMENT} -prune -exec rm -rf {} \;"
-
-    cleanup "${FIND_STATEMENT}" "${DELETE_STMT}"
-    CLEANUP_EXIT_CODE=$?
-
-    FIND_STATEMENT="find ${BASE_LOG_FOLDER}/* -type d -empty"
-    DELETE_STMT="${FIND_STATEMENT} -prune -exec rm -rf {} \;"
-
-    cleanup "${FIND_STATEMENT}" "${DELETE_STMT}"
-    CLEANUP_EXIT_CODE=$?
-
-    echo "Finished Running Cleanup Process"
-
-    echo "Deleting lock file..."
-    rm -f """ + str(LOG_CLEANUP_PROCESS_LOCK_FILE) + """
-    REMOVE_LOCK_FILE_EXIT_CODE=$?
-    if [ "${REMOVE_LOCK_FILE_EXIT_CODE}" != "0" ]; then
-        echo "Error removing the lock file. Check file permissions. To re-run the DAG, ensure that the lock file has been deleted (""" + str(LOG_CLEANUP_PROCESS_LOCK_FILE) + """)."
-        exit ${REMOVE_LOCK_FILE_EXIT_CODE}
-    fi
-
-else
-    echo "Another task is already deleting logs on this worker node. \
-    Skipping it!"
-    echo "If you believe you're receiving this message in error, kindly check \
-    if """ + str(LOG_CLEANUP_PROCESS_LOCK_FILE) + """ exists and delete it."
-    exit 0
-fi
-
-"""
-
-for log_cleanup_id in range(1, NUMBER_OF_WORKERS + 1):
-
-    for dir_id, directory in enumerate(DIRECTORIES_TO_DELETE):
-
-        log_cleanup_op = BashOperator(
-            task_id='log_cleanup_worker_num_' +
-            str(log_cleanup_id) + '_dir_' + str(dir_id),
-            bash_command=log_cleanup,
-            params={
-                "directory": str(directory),
-                "sleep_time": int(log_cleanup_id)*3},
-            dag=dag)
-
-        log_cleanup_op.set_upstream(start)
+    check_old_log_files >> delete_old_log_files
