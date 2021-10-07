@@ -47,9 +47,8 @@ def clear_missing_dags(session=None, **context):
 
     if entries_to_delete:
         log.info(f'Deleting {len(entries_to_delete)} DAG(s) from the DB')
-        session.query(DagModel) \
-            .where(DagModel.dag_id in (entry.dag_id for entry in entries_to_delete)) \
-            .delete()
+        for entry in entries_to_delete:
+            session.delete(entry)
 
         session.commit()
         log.info('All missing DAG(s) have been cleared')

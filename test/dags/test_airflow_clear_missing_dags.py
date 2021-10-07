@@ -74,4 +74,4 @@ def test_clear_missing_dags(airflow_session, dagrun):
         .filter(DagModel.dag_id.in_(DAG_CONFIGS.keys())) \
         .all()
 
-    assert [('location_exists',)] == dag_ids
+    assert dag_ids == [('location_exists',)]
