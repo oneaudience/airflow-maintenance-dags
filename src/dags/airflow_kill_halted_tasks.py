@@ -196,7 +196,6 @@ def kill_halted_tasks(session=None, **context):
         log.info(f'Killing {len(processes_to_kill)} processes')
         for process in processes_to_kill:
             kill_command = f'kill -9 {str(process.pid)}'
-            log.info(f'Running Command: {str(kill_command)}')
             output = os.popen(kill_command).read()
             log.info(f'Kill executed. Output for process, {str(process)}: {str(output)}')
 

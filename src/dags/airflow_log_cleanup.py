@@ -40,7 +40,7 @@ def check_for_old_log_files(xcom_key, max_age, **context):
     files_to_delete = []
     older_than_date = x_days_ago(datetime.utcnow(), max_age)
 
-    log.info(f'Looking for log files older than {older_than_date}')
+    log.info(f'Looking for log files older than {older_than_date.isoformat()}')
     # We use os.walk instead of os.listdir because there may be subdirectories
     # This avoids adding a directory name to the list of files to delete
     for root, _, files in os.walk(settings.LOG_DIR):
@@ -51,11 +51,11 @@ def check_for_old_log_files(xcom_key, max_age, **context):
                 files_to_delete.append(file_name)
 
     if files_to_delete:
-        log.info(f'Found {len(files_to_delete)} files marked to delete')
+        log.info(f'Found {len(files_to_delete)} log files to delete')
         context['ti'].xcom_push(key=xcom_key, value=files_to_delete)
         return True
 
-    log.info('No files found to delete')
+    log.info('No log files found to delete')
     return False
 
 
@@ -74,15 +74,14 @@ def delete_files(xcom_keys, **context):
         if xcom_files:
             files_to_delete.extend(xcom_files)
 
-    log.info(f'Deleting {len(files_to_delete)} files')
+    log.info(f'Deleting {len(files_to_delete)} old files')
     for file_path in files_to_delete:
         if os.path.exists(file_path):
             os.remove(file_path)
-            log.info(f'Deleted {file_path}')
         else:
             log.warning(f'File, {file_path}, does not exist!')
 
-    log.info('All files deleted')
+    log.info('All old files deleted')
 
 
 with DAG(

@@ -110,11 +110,6 @@ def cleanup_function(session=None, **context):
             f'Query: {str(query)}\n\n'
             f'\tDeleting {len(entries_to_delete)} {str(airflow_db_model.__name__)}(s):'
         )
-        for entry in entries_to_delete:
-            log.info(
-                f'Entry: {str(entry)}, '
-                f"Date: {str(entry.__dict__[str(age_check_column).split('.')[1]])}"
-            )
 
         # using bulk delete
         query.delete(synchronize_session=False)

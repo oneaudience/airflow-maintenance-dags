@@ -36,23 +36,23 @@ def clear_missing_dags(session=None, **context):
         if not file_location:
             log.info(
                 f'The file location for {str(dag)} was not found. '
-                'Assuming the Python definition file does NOT exist.'
+                'Assuming the Python definition file does NOT exist'
             )
             entries_to_delete.append(dag)
         elif not os.path.exists(file_location):
-            log.info(f"The Python definition file: {file_location}, for '{str(dag)}' does NOT exist.")
+            log.info(f"The Python definition file: {file_location}, for '{str(dag)}' does NOT exist")
             entries_to_delete.append(dag)
         else:
-            log.info(f"The Python definition file: {file_location}, for '{str(dag)}' DOES exist.")
+            log.info(f"The Python definition file: {file_location}, for '{str(dag)}' exists")
 
     if entries_to_delete:
         log.info(f'Deleting {len(entries_to_delete)} DAG(s) from the DB')
-        for entry in entries_to_delete:
-            session.delete(entry)
-            log.info(f'Deleted {str(entry)}')
+        session.query(DagModel) \
+            .where(DagModel.dag_id in (entry.dag_id for entry in entries_to_delete)) \
+            .delete()
 
         session.commit()
-        log.info('All missing DAGs have been cleared')
+        log.info('All missing DAG(s) have been cleared')
     else:
         log.info(f'No missing DAG(s) found to delete')
 
