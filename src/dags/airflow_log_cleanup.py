@@ -33,6 +33,8 @@ def check_for_old_log_files(xcom_key, max_age, **context):
     :param context: context with the Airflow DAG
     :type xcom_key: str
     :type max_age: int
+    :return: whether or not there are old log files to delete
+    :rtype: bool
     """
     log = context['ti'].log
     files_to_delete = []

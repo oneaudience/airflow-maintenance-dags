@@ -45,6 +45,14 @@ class Process(NamedTuple):
 
 
 def parse_process_linux_string(line):
+    """
+    Parse the linux string returned from the search command run
+
+    :param line: line to parse
+    :type line: str
+    :return: Process object with the information filled in for readability
+    :rtype: Process
+    """
     full_regex_match = re.search(full_regex, line)
     command = full_regex_match.group(2).strip()
     airflow_run_regex_match = re.search(airflow_run_regex, command)
@@ -60,6 +68,18 @@ def parse_process_linux_string(line):
 
 @provide_session
 def kill_halted_tasks(session=None, **context):
+    """
+    Stops a task or tasks when the:
+    - DAG is missing
+    - DAG is not active
+    - DagRun is missing
+    - DagRun not in the 'running' state
+    - TaskInstance is missing
+    - TaskInstance not in the 'queued', 'running', or 'up_for_retry' states
+
+    :param session: Airflow session used to query objects to delete
+    :param context: context within the Airflow DAG
+    """
     log = context['ti'].log
 
     process_search_command = "ps -o pid -o cmd -u `whoami` | grep 'airflow run'"

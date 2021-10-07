@@ -48,8 +48,13 @@ DATABASE_OBJECTS = [
 
 
 def get_max_days(**context):
+    """
+    Push the oldest date allowed to an xcom variable. All objects with a date prior to this will be deleted.
+
+    :param context: context within the Airflow DAG
+    """
     log = context['ti'].log
-    log.info(f'Checking Airflow variable MAX_AIRFLOW_AGE_IN_DAYS and defaulting to {settings.DEFAULT_AIRFLOW_AGE_IN_DAYS}')
+    log.info(f'Using Airflow variable MAX_AIRFLOW_AGE_IN_DAYS or defaulting to {settings.DEFAULT_AIRFLOW_AGE_IN_DAYS}')
     max_days = int(Variable.get('MAX_AIRFLOW_AGE_IN_DAYS', default_var=settings.DEFAULT_AIRFLOW_AGE_IN_DAYS))
     max_date = timezone.utcnow() - timedelta(days=max_days)
     log.info(f'Preparing to delete records older than {max_days} days ({max_date})')
@@ -59,10 +64,10 @@ def get_max_days(**context):
 @provide_session
 def cleanup_function(session=None, **context):
     """
+    Clears the Airflow DB of the Model specified in the context parameter `airflow_db_model` before the `max_date`
 
-    :param session:
-    :param context:
-    :return:
+    :param session: Airflow session used to query objects to delete
+    :param context: context within the Airflow DAG
     """
     log = context['ti'].log
     max_date = context['ti'].xcom_pull(key='max_date')

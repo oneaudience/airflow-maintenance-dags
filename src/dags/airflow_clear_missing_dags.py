@@ -13,6 +13,12 @@ from airflow.utils.db import provide_session
 
 @provide_session
 def clear_missing_dags(session=None, **context):
+    """
+    Checks the Airflow DB against existing dag files to clear the Airflow DB of DAGs missing an associated dag file
+
+    :param session: Airflow session used to query objects to delete
+    :param context: context within the Airflow DAG
+    """
     log = context['ti'].log
     log.info('Clearing all missing DAGs')
 
