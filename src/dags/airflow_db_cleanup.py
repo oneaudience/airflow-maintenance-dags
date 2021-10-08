@@ -1,6 +1,6 @@
 """
-An Airflow maintenance DAG that cleans out the DagRun, TaskInstance, Log, and XCom entries once a month to avoid having
-too much data in your Airflow MetaStore.
+An Airflow maintenance DAG that cleans out the Airflow DB Models entries, specified in `DATABASE_OBJECTS`, once a month
+to avoid having too much data in the Airflow MetaStore.
 """
 from datetime import datetime, timedelta
 
@@ -79,7 +79,7 @@ def cleanup_function(session=None, **context):
     keep_last_filters = context['params'].get('keep_last_filters')
     keep_last_group_by = context['params'].get('keep_last_group_by')
 
-    log.info(f'Clearing Airflow DB table of model: {str(airflow_db_model.__name__)}')
+    log.info(f'Clearing Airflow DB table of model: {str(airflow_db_model.__name__)} before {max_date.isoformat()}')
     query = session.query(airflow_db_model).options(
         load_only(age_check_column),
     )
@@ -100,7 +100,6 @@ def cleanup_function(session=None, **context):
             and_(age_check_column.notin_(subquery)),
             and_(age_check_column <= max_date),
         )
-
     else:
         query = query.filter(age_check_column <= max_date)
 

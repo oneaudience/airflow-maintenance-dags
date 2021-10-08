@@ -1,11 +1,8 @@
 """
-A maintenance workflow that you can deploy into Airflow to periodically kill
-off tasks that are running in the background that don't correspond to a running
-task in the DB.
-This is useful because when you kill off a DAG Run or Task through the Airflow
-Web Server, the task still runs in the background on one of the executors until
-the task is complete.
-airflow trigger_dag airflow-kill-halted-tasks
+An Airflow maintenance DAG that runs monthly and kills off tasks that are running in the background that no longer
+correspond to a running task in the DB.
+This is useful because when you kill off a DAG Run or Task through the Airflow Web Server, the task still runs in the
+background on one of the executors until the task is complete.
 """
 import os
 import re
@@ -95,13 +92,13 @@ def kill_halted_tasks(session=None, **context):
            and ' grep ' not in line
            and KILL_HALTED_TASKS_DAG_ID not in line
     ]
-    log.info('Searching through running processes')
 
     def mark_process_to_kill(proc, reason):
         proc.kill_reason = reason
         log.warning(f'Marking {proc.to_dict()} to be killed. Reason: {proc.kill_reason}')
         processes_to_kill.append(proc)
 
+    log.info('Searching through running processes')
     processes_to_kill = []
     for line in search_output_filtered:
         process = parse_process_linux_string(line)

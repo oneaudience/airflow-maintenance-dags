@@ -1,7 +1,7 @@
 """
-An Airflow maintenance DAG that will clean out entries in the DAG table once a month.
-This ensures that the DAG table doesn't have needless items in it and that the Airflow Web Server displays only those
-available DAGs.
+An Airflow maintenance DAG that will clean out entries in the DAG table without a corresponding dag file once a month.
+This ensures that the DAG table doesn't have needless items in it and that the Airflow Web Server displays only the
+available DAG(s).
 """
 import os
 from datetime import datetime

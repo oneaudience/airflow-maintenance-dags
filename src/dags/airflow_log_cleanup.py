@@ -1,3 +1,7 @@
+"""
+An Airflow maintenance DAG that cleans out the local Airflow log files older than the date specified in
+`settings.MAX_LOG_fILE_AGE`.
+"""
 import os
 from datetime import datetime, timedelta
 from pathlib import Path
