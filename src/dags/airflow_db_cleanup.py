@@ -104,19 +104,10 @@ def cleanup_function(session=None, **context):
     else:
         query = query.filter(age_check_column <= max_date)
 
-    entries_to_delete = query.all()
-    if entries_to_delete:
-        log.info(
-            f'Query: {str(query)}\n\n'
-            f'\tDeleting {len(entries_to_delete)} {str(airflow_db_model.__name__)}(s):'
-        )
-
-        # using bulk delete
-        query.delete(synchronize_session=False)
-        session.commit()
-        log.info(f'Airflow model, {str(airflow_db_model.__name__)}, cleared from DB')
-    else:
-        log.info(f'No entries found to delete for {str(airflow_db_model.__name__)}')
+    # using bulk delete
+    num_deleted = query.delete(synchronize_session=False)
+    session.commit()
+    log.info(f'{num_deleted} {str(airflow_db_model.__name__)}(s) cleared from DB')
 
 
 with DAG(
