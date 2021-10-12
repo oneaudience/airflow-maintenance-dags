@@ -1,11 +1,8 @@
 """
-A maintenance workflow that you can deploy into Airflow to periodically kill
-off tasks that are running in the background that don't correspond to a running
-task in the DB.
-This is useful because when you kill off a DAG Run or Task through the Airflow
-Web Server, the task still runs in the background on one of the executors until
-the task is complete.
-airflow trigger_dag airflow-kill-halted-tasks
+An Airflow maintenance DAG that runs monthly and kills off tasks that are running in the background that no longer
+correspond to a running task in the DB.
+This is useful because when you kill off a DAG Run or Task through the Airflow Web Server, the task still runs in the
+background on one of the executors until the task is complete.
 """
 import os
 import re
@@ -45,6 +42,14 @@ class Process(NamedTuple):
 
 
 def parse_process_linux_string(line):
+    """
+    Parse the linux string returned from the search command run
+
+    :param line: line to parse
+    :type line: str
+    :return: Process object with the information filled in for readability
+    :rtype: Process
+    """
     full_regex_match = re.search(full_regex, line)
     command = full_regex_match.group(2).strip()
     airflow_run_regex_match = re.search(airflow_run_regex, command)
@@ -60,6 +65,18 @@ def parse_process_linux_string(line):
 
 @provide_session
 def kill_halted_tasks(session=None, **context):
+    """
+    Stops a task or tasks when the:
+    - DAG is missing
+    - DAG is not active
+    - DagRun is missing
+    - DagRun not in the 'running' state
+    - TaskInstance is missing
+    - TaskInstance not in the 'queued', 'running', or 'up_for_retry' states
+
+    :param session: Airflow session used to query objects to delete
+    :param context: context within the Airflow DAG
+    """
     log = context['ti'].log
 
     process_search_command = "ps -o pid -o cmd -u `whoami` | grep 'airflow run'"
@@ -75,13 +92,13 @@ def kill_halted_tasks(session=None, **context):
            and ' grep ' not in line
            and KILL_HALTED_TASKS_DAG_ID not in line
     ]
-    log.info('Searching through running processes')
 
     def mark_process_to_kill(proc, reason):
         proc.kill_reason = reason
         log.warning(f'Marking {proc.to_dict()} to be killed. Reason: {proc.kill_reason}')
         processes_to_kill.append(proc)
 
+    log.info('Searching through running processes')
     processes_to_kill = []
     for line in search_output_filtered:
         process = parse_process_linux_string(line)
@@ -176,7 +193,6 @@ def kill_halted_tasks(session=None, **context):
         log.info(f'Killing {len(processes_to_kill)} processes')
         for process in processes_to_kill:
             kill_command = f'kill -9 {str(process.pid)}'
-            log.info(f'Running Command: {str(kill_command)}')
             output = os.popen(kill_command).read()
             log.info(f'Kill executed. Output for process, {str(process)}: {str(output)}')
 
