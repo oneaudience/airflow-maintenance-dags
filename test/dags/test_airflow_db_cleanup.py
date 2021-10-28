@@ -337,8 +337,8 @@ def make_airflow_objects():
 @pytest.mark.usefixtures('make_airflow_objects')
 @pytest.mark.parametrize(
     'obj',
-    [pytest.param(obj, id=f'{obj["airflow_db_model"].__name__}, print') for obj in DATABASE_OBJECTS] +
-    [pytest.param(obj, id=f'{obj["airflow_db_model"].__name__}, no print') for obj in DATABASE_OBJECTS]
+    [pytest.param(obj, id=f'{class_name}, print') for class_name, obj in DATABASE_OBJECTS.items()] +
+    [pytest.param(obj, id=f'{class_name}, no print') for class_name, obj in DATABASE_OBJECTS.items()]
 )
 @provide_session
 def test_airflow_db_cleanup(obj, session=None):
@@ -373,7 +373,7 @@ def test_airflow_db_cleanup(obj, session=None):
 
 
 @pytest.mark.usefixtures('make_airflow_objects')
-@pytest.mark.parametrize('obj', [pytest.param(obj, id=obj["airflow_db_model"].__name__) for obj in DATABASE_OBJECTS])
+@pytest.mark.parametrize('obj', [pytest.param(obj, id=class_name) for class_name, obj in DATABASE_OBJECTS.items()])
 @provide_session
 def test_airflow_db_cleanup_no_delete(obj, session=None):
     airflow_db_model = obj['airflow_db_model']
