@@ -7,7 +7,7 @@ import os
 from datetime import datetime
 
 from airflow.models import DAG, DagModel
-from airflow.operators.python_operator import PythonOperator
+from airflow.operators.python import PythonOperator
 from airflow.utils.db import provide_session
 
 
@@ -49,6 +49,8 @@ def clear_missing_dags(session=None, **context):
         log.info(f'Deleting {len(entries_to_delete)} DAG(s) from the DB')
         for entry in entries_to_delete:
             session.delete(entry)
+            if entry.serialized_dag:
+                session.delete(entry.serialized_dag)
 
         session.commit()
         log.info('All missing DAG(s) have been cleared')

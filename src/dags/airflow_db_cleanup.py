@@ -6,11 +6,10 @@ from datetime import datetime, timedelta
 
 import dateutil.parser
 from airflow.models import DAG, DagRun, Log, XCom, TaskInstance, Variable
-from airflow.operators.python_operator import PythonOperator
+from airflow.operators.python import PythonOperator
 from airflow.utils import timezone
 from airflow.utils.db import provide_session
 from sqlalchemy import func, and_
-from sqlalchemy.orm import load_only
 
 import settings
 
@@ -82,9 +81,7 @@ def cleanup_function(db_class, session=None, **context):
     keep_last_group_by = DATABASE_OBJECTS[db_class].get('keep_last_group_by')
 
     log.info(f'Clearing Airflow DB table of model: {str(airflow_db_model.__name__)} before {max_date.isoformat()}')
-    query = session.query(airflow_db_model).options(
-        load_only(age_check_column),
-    )
+    query = session.query(airflow_db_model)
 
     if keep_last:
         subquery = session.query(func.max(DagRun.execution_date))

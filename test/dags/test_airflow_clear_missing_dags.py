@@ -2,13 +2,13 @@ import os
 from datetime import datetime
 
 import pytest
-from airflow.models import TaskInstance, DAG, DagModel
+from airflow.models import TaskInstance, DagModel
 from airflow.utils.state import State
-from pendulum import Pendulum
+from pendulum import DateTime, UTC
 
 from dags.airflow_clear_missing_dags import clear_missing_dags_dag
 
-EXECUTION_DATE = Pendulum(2020, 7, 18, 6)
+EXECUTION_DATE = DateTime(2020, 7, 18, 6, tzinfo=UTC)
 
 
 # DAG_CONFIGS is of the format: dag_id: dag configuration options
@@ -36,8 +36,8 @@ DAG_CONFIGS = {
 }
 
 
-@pytest.fixture(scope='module')
-def dagrun():
+@pytest.fixture()
+def dagrun(airflow_session):
     dag_run = clear_missing_dags_dag.create_dagrun(
         run_id=f'test_airflow_db_cleanup__{datetime.utcnow()}',
         execution_date=EXECUTION_DATE,
@@ -48,6 +48,7 @@ def dagrun():
 
 @pytest.fixture
 def prepare_missing_dags(fs, airflow_session):
+    fs.add_real_directory(os.path.dirname(clear_missing_dags_dag.fileloc))
     for dag_id, dag_config in DAG_CONFIGS.items():
         dag = DagModel(dag_id=dag_id, **dag_config)
         airflow_session.add(dag)

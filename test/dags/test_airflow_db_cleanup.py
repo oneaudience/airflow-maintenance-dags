@@ -3,20 +3,21 @@ from datetime import datetime, timedelta
 import pytest
 from airflow import DAG
 from airflow.models import TaskInstance, XCom, Variable, DagRun, Log
-from airflow.operators.dummy_operator import DummyOperator
+from airflow.operators.dummy import DummyOperator
 from airflow.utils.db import provide_session, create_session
 from airflow.utils.state import State
+from airflow.utils.types import DagRunType
 from dateutil.parser import parse
-from pendulum import Pendulum
+from pendulum import DateTime, UTC
 
 from dags.airflow_db_cleanup import db_cleanup_dag, DATABASE_OBJECTS
 from test import DateTimeRange
 
-EXECUTION_DATE = Pendulum(2020, 7, 18, 6)
+EXECUTION_DATE = DateTime(2020, 7, 18, 6, tzinfo=UTC)
 
 
-@pytest.fixture(scope='module')
-def dagrun():
+@pytest.fixture()
+def dagrun(airflow_session):
     dag_run = db_cleanup_dag.create_dagrun(
         run_id=f'test_airflow_db_cleanup__{datetime.utcnow()}',
         execution_date=EXECUTION_DATE,
@@ -40,7 +41,7 @@ def clear_variables():
     pytest.param(True, id='Use variable'),
     pytest.param(False, id='Use settings')
 ])
-def test_get_max_days(mocker, use_variable):
+def test_get_max_days(mocker, dagrun, use_variable):
     variable_value = 5
     setting_value = 10
 
@@ -74,11 +75,12 @@ def test_get_max_days(mocker, use_variable):
     ]
 
 
-cleanup_threshold = Pendulum(2020, 6, 19, 12, 34, 56)
+cleanup_threshold = DateTime(2020, 6, 19, 12, 34, 56, tzinfo=UTC)
 # Last midnight to get dropped (most of our DAG runs are at midnight UTC)
-dropped_midnight = Pendulum(cleanup_threshold.year,
+dropped_midnight = DateTime(cleanup_threshold.year,
                             cleanup_threshold.month,
-                            cleanup_threshold.day)
+                            cleanup_threshold.day,
+                            tzinfo=UTC)
 
 # It's hard to compare SQLAlchemy objects that aren't bound to the same session,
 # so compare by a specific set of fields instead
@@ -194,26 +196,28 @@ AIRFLOW_DATA = [
         external_trigger=False,
     ), True),
     # The other types just filter based on one column, without any special conditions to keep items
-    # TaskInstance
+    # TaskInstance; make sure each one matches a DagRun above
+    # Note that each task will automatically be added to the DAG during test setup,
+    # So no 2 TIs should share a dag_id/task_id pair
     (TaskInstance, dict(
         task_id='task_7',
-        dag_id='dag_2',
-        execution_date=dropped_midnight.subtract(days=3)
+        dag_id='dag_4',
+        execution_date=cleanup_threshold.subtract(days=3)
     ), False),
     (TaskInstance, dict(
         task_id='task_7',
-        dag_id='dag_2',
+        dag_id='dag_5',
         execution_date=dropped_midnight.subtract(days=1)
     ), False),
     (TaskInstance, dict(
         task_id='task_7',
-        dag_id='dag_2',
-        execution_date=dropped_midnight.add(days=1)
+        dag_id='dag_1',
+        execution_date=cleanup_threshold.add(days=1)
     ), True),
     (TaskInstance, dict(
         task_id='task_7',
-        dag_id='dag_2',
-        execution_date=dropped_midnight.add(days=3)
+        dag_id='dag_6',
+        execution_date=cleanup_threshold.add(days=3)
     ), True),
     # Log - there are two datetime columns; make sure the right one (dttm) is used for log deletion
     (Log, dict(
@@ -277,6 +281,17 @@ def make_airflow_objects():
         session.query(TaskInstance).delete()
         session.query(XCom).delete()
 
+        # Create a DagModel entry for each dag_id
+        dags = {
+            dag_id: DAG(dag_id=dag_id, start_date=dropped_midnight.subtract(years=1))
+            for dag_id in {obj['dag_id'] for _, obj, _ in AIRFLOW_DATA}
+        }
+        for dag in dags.values():
+            dag.sync_to_db(session=session)
+
+        # Create DagRun entries
+        session.add_all([DagRun(**obj_data, run_type=DagRunType.MANUAL if obj_data['external_trigger'] else DagRunType.SCHEDULED) for obj_class, obj_data, _ in AIRFLOW_DATA if obj_class is DagRun])
+
         # First, the XCom read by these tasks
         XCom.set(
             key='max_date',
@@ -293,8 +308,7 @@ def make_airflow_objects():
 
         # TaskInstance and Log have custom constructors
         def make_ti(ti_data):
-            with DAG(dag_id=ti_data['dag_id'], start_date=dropped_midnight.subtract(years=1)):
-                task = DummyOperator(task_id=ti_data['task_id'])
+            task = DummyOperator(task_id=ti_data['task_id'], dag=dags[ti_data['dag_id']])
             return TaskInstance(
                 task=task,
                 execution_date=ti_data['execution_date']
@@ -305,7 +319,7 @@ def make_airflow_objects():
             for obj_class, obj_data, _ in AIRFLOW_DATA
             if obj_class is TaskInstance
         ]
-        session.add_all(tis)
+        session.add_all([ti for ti in tis if ti])
 
         def make_log(log_data):
             log = Log(task_instance=None, **log_data)
@@ -320,12 +334,6 @@ def make_airflow_objects():
         ]
         session.add_all(logs)
 
-        # Dag Runs are easy, no custom constructor
-        session.add_all([
-            obj_class(**obj_data)
-            for obj_class, obj_data, _ in AIRFLOW_DATA
-            if obj_class not in (TaskInstance, XCom, Log)
-        ])
     yield
     with create_session() as session:
         session.query(DagRun).delete()
@@ -341,7 +349,7 @@ def make_airflow_objects():
     [pytest.param(obj, id=f'{class_name}, no print') for class_name, obj in DATABASE_OBJECTS.items()]
 )
 @provide_session
-def test_airflow_db_cleanup(obj, session=None):
+def test_airflow_db_cleanup(dagrun, obj, session=None):
     airflow_db_model = obj['airflow_db_model']
     task_id = f'cleanup_{airflow_db_model.__name__}'
     ti = TaskInstance(
@@ -375,7 +383,7 @@ def test_airflow_db_cleanup(obj, session=None):
 @pytest.mark.usefixtures('make_airflow_objects')
 @pytest.mark.parametrize('obj', [pytest.param(obj, id=class_name) for class_name, obj in DATABASE_OBJECTS.items()])
 @provide_session
-def test_airflow_db_cleanup_no_delete(obj, session=None):
+def test_airflow_db_cleanup_no_delete(dagrun, obj, session=None):
     airflow_db_model = obj['airflow_db_model']
 
     def make_obj(item):

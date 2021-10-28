@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from airflow import DAG
-from airflow.operators.python_operator import PythonOperator, ShortCircuitOperator
+from airflow.operators.python import PythonOperator, ShortCircuitOperator
 
 import settings
 
