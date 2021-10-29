@@ -1,17 +1,11 @@
 from copy import copy
-from unittest import mock
 
 import pytest
-import responses
-from airflow.jobs import BaseJob
+from airflow.configuration import conf
 from airflow.models import DagRun, Log, TaskInstance, XCom, DagTag, DagModel
 from airflow.utils.db import create_session, resetdb
 from sqlalchemy import create_engine
 from sqlalchemy_utils import database_exists
-
-settings_patchers = [
-    mock.patch('settings.SQLALCHEMY_DATABASE_URI', 'sqlite:///:memory:')
-]
 
 
 def create_database(url):
@@ -40,15 +34,10 @@ def airflow_postgres_engine(postgres):
 
 @pytest.hookimpl
 def pytest_sessionstart(session):
-    # This will allow dw_hook to function even when S3 mocking is active
-    responses._default_mock.add_passthru('http+docker://localhost')
-    for patcher in settings_patchers:
-        patcher.start()
-
-    with create_session() as sql_session:
-        # Have to manually drop the job table until https://issues.apache.org/jira/browse/AIRFLOW-5036 is fixed
-        BaseJob.__table__.drop(sql_session.get_bind(), checkfirst=True)
-    resetdb(rbac=False)
+    # Clear out the Airflow db and make sure we're in unit testing mode
+    if not conf.getboolean('core', 'unit_test_mode'):
+        raise RuntimeError('Not running in unit test mode. Set AIRFLOW__CORE__UNIT_TEST_MODE=true')
+    resetdb()
 
 
 @pytest.fixture

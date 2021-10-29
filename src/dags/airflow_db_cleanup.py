@@ -6,45 +6,45 @@ from datetime import datetime, timedelta
 
 import dateutil.parser
 from airflow.models import DAG, DagRun, Log, XCom, TaskInstance, Variable
-from airflow.operators.python_operator import PythonOperator
+from airflow.operators.python import PythonOperator
 from airflow.utils import timezone
 from airflow.utils.db import provide_session
 from sqlalchemy import func, and_
-from sqlalchemy.orm import load_only
 
 import settings
 
 # List of all the objects that will be deleted. Comment out the DB objects you want to skip.
-DATABASE_OBJECTS = [
-    {
+DATABASE_OBJECTS = {
+    'DagRun': {
         'airflow_db_model': DagRun,
         'age_check_column': DagRun.execution_date,
         'keep_last': True,
         'keep_last_filters': [DagRun.external_trigger.is_(False)],
         'keep_last_group_by': DagRun.dag_id,
     },
-    {
+    'TaskInstance': {
         'airflow_db_model': TaskInstance,
         'age_check_column': TaskInstance.execution_date,
         'keep_last': False,
         'keep_last_filters': None,
         'keep_last_group_by': None,
     },
-    {
+    'Log': {
         'airflow_db_model': Log,
         'age_check_column': Log.dttm,
         'keep_last': False,
         'keep_last_filters': None,
         'keep_last_group_by': None,
     },
-    {
+    # XCom can have a custom class, and it's usually an alias for BaseXCom, so don't hard-code this name
+    XCom.__name__: {
         'airflow_db_model': XCom,
         'age_check_column': XCom.execution_date,
         'keep_last': False,
         'keep_last_filters': None,
         'keep_last_group_by': None,
     },
-]
+}
 
 
 def get_max_days(**context):
@@ -62,10 +62,11 @@ def get_max_days(**context):
 
 
 @provide_session
-def cleanup_function(session=None, **context):
+def cleanup_function(db_class, session=None, **context):
     """
     Clears the Airflow DB of the Model specified in the context parameter `airflow_db_model` before the `max_date`
 
+    :param db_class: The name of the class to clean up
     :param session: Airflow session used to query objects to delete
     :param context: context within the Airflow DAG
     """
@@ -73,16 +74,14 @@ def cleanup_function(session=None, **context):
     max_date = context['ti'].xcom_pull(key='max_date')
     max_date = dateutil.parser.parse(max_date)  # stored as iso8601 str in xcom
 
-    airflow_db_model = context['params'].get('airflow_db_model')
-    age_check_column = context['params'].get('age_check_column')
-    keep_last = context['params'].get('keep_last')
-    keep_last_filters = context['params'].get('keep_last_filters')
-    keep_last_group_by = context['params'].get('keep_last_group_by')
+    airflow_db_model = DATABASE_OBJECTS[db_class].get('airflow_db_model')
+    age_check_column = DATABASE_OBJECTS[db_class].get('age_check_column')
+    keep_last = DATABASE_OBJECTS[db_class].get('keep_last')
+    keep_last_filters = DATABASE_OBJECTS[db_class].get('keep_last_filters')
+    keep_last_group_by = DATABASE_OBJECTS[db_class].get('keep_last_group_by')
 
     log.info(f'Clearing Airflow DB table of model: {str(airflow_db_model.__name__)} before {max_date.isoformat()}')
-    query = session.query(airflow_db_model).options(
-        load_only(age_check_column),
-    )
+    query = session.query(airflow_db_model)
 
     if keep_last:
         subquery = session.query(func.max(DagRun.execution_date))
@@ -121,10 +120,12 @@ with DAG(
         provide_context=True,
         python_callable=get_max_days,
     )
-    for db_object in DATABASE_OBJECTS:
+    for db_object_name in DATABASE_OBJECTS:
         calc_max_date >> PythonOperator(
-            task_id=f"cleanup_{str(db_object['airflow_db_model'].__name__)}",
+            task_id=f"cleanup_{db_object_name}",
             python_callable=cleanup_function,
-            params=db_object,
+            op_kwargs={
+                'db_class': db_object_name
+            },
             provide_context=True,
         )

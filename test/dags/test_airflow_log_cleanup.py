@@ -4,12 +4,12 @@ from datetime import datetime
 import pytest
 from airflow.models import TaskInstance, XCom, DagRun
 from airflow.utils.state import State
-from pendulum import Pendulum
+from pendulum import DateTime, UTC
 
 import settings
 from dags.airflow_log_cleanup import log_cleanup_dag, XCOM_LOG_FILES_KEY
 
-EXECUTION_DATE = Pendulum(2020, 7, 18, 6)
+EXECUTION_DATE = DateTime(2020, 7, 18, 6, tzinfo=UTC)
 
 
 def create_file_with_st_mtime(py_fake_fs, full_path, dt):
@@ -20,8 +20,8 @@ def create_file_with_st_mtime(py_fake_fs, full_path, dt):
     f.stat_result._st_mtime_ns = dt.timestamp() * 1e9  # nanoseconds
 
 
-@pytest.fixture(scope='module')
-def dagrun():
+@pytest.fixture()
+def dagrun(airflow_session):
     dag_run = log_cleanup_dag.create_dagrun(
         run_id=f'test_airflow_log_cleanup__{datetime.utcnow()}',
         execution_date=EXECUTION_DATE,
