@@ -10,7 +10,7 @@ from airflow.utils.types import DagRunType
 from dateutil.parser import parse
 from pendulum import DateTime, UTC
 
-from dags.airflow_db_cleanup import db_cleanup_dag, DATABASE_OBJECTS
+from maintenance_dags.airflow_db_cleanup import db_cleanup_dag, DATABASE_OBJECTS
 from test import DateTimeRange
 
 EXECUTION_DATE = DateTime(2020, 7, 18, 6, tzinfo=UTC)
