@@ -97,7 +97,6 @@ with DAG(
 ) as log_cleanup_dag:
     check_old_log_files = ShortCircuitOperator(
         task_id='check_old_log_files',
-        provide_context=True,
         python_callable=check_for_old_log_files,
         op_kwargs={
             'xcom_key': XCOM_LOG_FILES_KEY,
@@ -106,7 +105,6 @@ with DAG(
     )
     delete_old_log_files = PythonOperator(
         task_id='delete_old_log_files',
-        provide_context=True,
         python_callable=delete_files,
         op_kwargs={
             'xcom_keys': [XCOM_LOG_FILES_KEY],

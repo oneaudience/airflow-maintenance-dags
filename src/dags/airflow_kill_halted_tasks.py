@@ -211,5 +211,4 @@ with DAG(
     kill_halted_tasks_op = PythonOperator(
         task_id='kill_halted_tasks',
         python_callable=kill_halted_tasks,
-        provide_context=True,
     )
