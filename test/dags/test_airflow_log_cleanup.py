@@ -6,7 +6,7 @@ from airflow.models import TaskInstance, XCom, DagRun
 from airflow.utils.state import State
 from pendulum import DateTime, UTC
 
-import settings
+from maintenance_dags import settings
 from maintenance_dags.airflow_log_cleanup import log_cleanup_dag, XCOM_LOG_FILES_KEY
 
 EXECUTION_DATE = DateTime(2020, 7, 18, 6, tzinfo=UTC)

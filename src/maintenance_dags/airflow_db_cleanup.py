@@ -11,7 +11,7 @@ from airflow.utils import timezone
 from airflow.utils.db import provide_session
 from sqlalchemy import func, and_
 
-import settings
+from . import settings
 
 # List of all the objects that will be deleted. Comment out the DB objects you want to skip.
 DATABASE_OBJECTS = {

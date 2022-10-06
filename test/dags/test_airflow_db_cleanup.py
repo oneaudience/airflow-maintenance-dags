@@ -45,7 +45,7 @@ def test_get_max_days(mocker, dagrun, use_variable):
     variable_value = 5
     setting_value = 10
 
-    mocker.patch('settings.DEFAULT_AIRFLOW_AGE_IN_DAYS', setting_value)
+    mocker.patch('maintenance_dags.settings.DEFAULT_AIRFLOW_AGE_IN_DAYS', setting_value)
     if use_variable:
         days_ago = variable_value
         Variable.set('MAX_AIRFLOW_AGE_IN_DAYS', variable_value)

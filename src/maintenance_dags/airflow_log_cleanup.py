@@ -9,7 +9,7 @@ from pathlib import Path
 from airflow import DAG
 from airflow.operators.python import PythonOperator, ShortCircuitOperator
 
-import settings
+from . import settings
 
 XCOM_LOG_FILES_KEY = 'log_files_to_delete'
 
