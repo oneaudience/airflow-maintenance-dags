@@ -127,5 +127,4 @@ with DAG(
             op_kwargs={
                 'db_class': db_object_name
             },
-            provide_context=True,
         )

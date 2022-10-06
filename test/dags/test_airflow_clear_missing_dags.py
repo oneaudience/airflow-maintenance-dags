@@ -6,7 +6,7 @@ from airflow.models import TaskInstance, DagModel
 from airflow.utils.state import State
 from pendulum import DateTime, UTC
 
-from dags.airflow_clear_missing_dags import clear_missing_dags_dag
+from maintenance_dags.airflow_clear_missing_dags import clear_missing_dags_dag
 
 EXECUTION_DATE = DateTime(2020, 7, 18, 6, tzinfo=UTC)
 

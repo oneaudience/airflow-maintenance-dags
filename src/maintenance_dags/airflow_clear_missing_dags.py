@@ -68,5 +68,4 @@ with DAG(
     clear_missing_dags_op = PythonOperator(
         task_id='clear_missing_dags',
         python_callable=clear_missing_dags,
-        provide_context=True,
     )

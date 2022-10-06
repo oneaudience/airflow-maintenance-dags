@@ -7,7 +7,7 @@ from airflow.utils.state import State
 from pendulum import DateTime, UTC
 
 import settings
-from dags.airflow_log_cleanup import log_cleanup_dag, XCOM_LOG_FILES_KEY
+from maintenance_dags.airflow_log_cleanup import log_cleanup_dag, XCOM_LOG_FILES_KEY
 
 EXECUTION_DATE = DateTime(2020, 7, 18, 6, tzinfo=UTC)
 
@@ -64,7 +64,7 @@ def dagrun(airflow_session):
 def test_check_old_log_files(mocker, fs, dagrun, log_files_to_create, older_than_date, expected):
     dagrun: DagRun
     fs.create_dir(settings.LOG_DIR)
-    mocker.patch('dags.airflow_log_cleanup.x_days_ago', return_value=older_than_date)
+    mocker.patch('maintenance_dags.airflow_log_cleanup.x_days_ago', return_value=older_than_date)
 
     log_files = []
     for file_name, creation_timestamp in log_files_to_create.items():
