@@ -1,6 +1,6 @@
 [project]
 name = "airflow_maintenance_dags"
-version = "0.2.1"
+version = "0.2.2"
 description = "A series of DAGs to help maintain and clean up after the operations of an Airflow environment"
 readme = "README.md"
 requires-python = ">=3.8"
