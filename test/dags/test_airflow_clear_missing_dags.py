@@ -1,9 +1,9 @@
 import os
-from datetime import datetime
 
 import pytest
-from airflow.models import TaskInstance, DagModel
+from airflow.models import TaskInstance, DagModel, DagRun
 from airflow.utils.state import State
+from airflow.utils.types import DagRunType
 from pendulum import DateTime, UTC
 
 from maintenance_dags.airflow_clear_missing_dags import clear_missing_dags_dag
@@ -37,13 +37,13 @@ DAG_CONFIGS = {
 
 
 @pytest.fixture()
-def dagrun(airflow_session):
-    dag_run = clear_missing_dags_dag.create_dagrun(
-        run_id=f'test_airflow_db_cleanup__{datetime.utcnow()}',
+def dag_run(airflow_session) -> DagRun:
+    return clear_missing_dags_dag.create_dagrun(
+        run_type=DagRunType.SCHEDULED,
         execution_date=EXECUTION_DATE,
         state=State.RUNNING,
+        session=airflow_session
     )
-    return dag_run
 
 
 @pytest.fixture
@@ -63,10 +63,10 @@ def prepare_missing_dags(fs, airflow_session):
 
 
 @pytest.mark.usefixtures('prepare_missing_dags')
-def test_clear_missing_dags(airflow_session, dagrun):
+def test_clear_missing_dags(airflow_session, dag_run):
     ti = TaskInstance(
-        task=dagrun.dag.get_task('clear_missing_dags'),
-        execution_date=dagrun.execution_date,
+        task=dag_run.dag.get_task('clear_missing_dags'),
+        execution_date=dag_run.execution_date,
     )
     ti.set_state(State.NONE)
     ti.run(ignore_all_deps=True)
