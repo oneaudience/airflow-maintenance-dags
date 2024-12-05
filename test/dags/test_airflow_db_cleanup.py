@@ -116,7 +116,7 @@ AIRFLOW_DATA = [
         execution_date=cleanup_threshold.subtract(days=2),
         run_id='dag3_run1',
         external_trigger=False,
-    ), True),
+    ), False),
     # dag_4: One triggered run, old
     (DagRun, dict(
         dag_id='dag_4',
@@ -192,7 +192,7 @@ AIRFLOW_DATA = [
         execution_date=dropped_midnight.subtract(hours=12),
         run_id='dag7_run2',
         external_trigger=False,
-    ), True),
+    ), False),
     # The other types just filter based on one column, without any special conditions to keep items
     # TaskInstance; make sure each one matches a DagRun above
     # Note that each task will automatically be added to the DAG during test setup,
