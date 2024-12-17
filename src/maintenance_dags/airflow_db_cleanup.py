@@ -18,13 +18,6 @@ DATABASE_OBJECTS = {
     'DagRun': {
         'airflow_db_model': DagRun,
         'age_check_column': DagRun.execution_date,
-        'keep_last': True,
-        'keep_last_filters': [DagRun.external_trigger.is_(False)],
-        'keep_last_group_by': DagRun.dag_id,
-    },
-    'TaskInstance': {
-        'airflow_db_model': TaskInstance,
-        'age_check_column': TaskInstance.execution_date,
         'keep_last': False,
         'keep_last_filters': None,
         'keep_last_group_by': None,
@@ -121,7 +114,7 @@ with DAG(
         python_callable=get_max_days,
     )
     for db_object_name in DATABASE_OBJECTS:
-        calc_max_date >> PythonOperator(
+        db_cleanup_dag.leaves >> PythonOperator(
             task_id=f"cleanup_{db_object_name}",
             python_callable=cleanup_function,
             op_kwargs={

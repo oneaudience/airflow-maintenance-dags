@@ -4,12 +4,13 @@ from datetime import datetime
 import pytest
 from airflow.models import TaskInstance, XCom, DagRun
 from airflow.utils.state import State
+from airflow.utils.types import DagRunType
 from pendulum import DateTime, UTC
 
 from maintenance_dags import settings
 from maintenance_dags.airflow_log_cleanup import log_cleanup_dag, XCOM_LOG_FILES_KEY
 
-EXECUTION_DATE = DateTime(2020, 7, 18, 6, tzinfo=UTC)
+EXECUTION_DATE = DateTime(2024, 7, 18, 6, tzinfo=UTC)
 
 
 def create_file_with_st_mtime(py_fake_fs, full_path, dt):
@@ -21,13 +22,13 @@ def create_file_with_st_mtime(py_fake_fs, full_path, dt):
 
 
 @pytest.fixture()
-def dagrun(airflow_session):
-    dag_run = log_cleanup_dag.create_dagrun(
-        run_id=f'test_airflow_log_cleanup__{datetime.utcnow()}',
+def dag_run(airflow_session) -> DagRun:
+    return log_cleanup_dag.create_dagrun(
+        run_type=DagRunType.SCHEDULED,
         execution_date=EXECUTION_DATE,
         state=State.RUNNING,
+        session=airflow_session,
     )
-    return dag_run
 
 
 @pytest.mark.parametrize('log_files_to_create, older_than_date, expected', [
@@ -61,8 +62,7 @@ def dagrun(airflow_session):
         id='files with nothing to delete',
     ),
 ])
-def test_check_old_log_files(mocker, fs, dagrun, log_files_to_create, older_than_date, expected):
-    dagrun: DagRun
+def test_check_old_log_files(mocker, fs, dag_run, log_files_to_create: dict, older_than_date, expected):
     fs.create_dir(settings.LOG_DIR)
     mocker.patch('maintenance_dags.airflow_log_cleanup.x_days_ago', return_value=older_than_date)
 
@@ -73,8 +73,8 @@ def test_check_old_log_files(mocker, fs, dagrun, log_files_to_create, older_than
         log_files.append(file_name)
 
     ti = TaskInstance(
-        task=dagrun.dag.get_task('check_old_log_files'),
-        execution_date=dagrun.execution_date,
+        task=dag_run.dag.get_task('check_old_log_files'),
+        execution_date=dag_run.execution_date,
     )
     ti.set_state(State.NONE)
     ti.run(ignore_all_deps=True)
@@ -99,7 +99,7 @@ def test_check_old_log_files(mocker, fs, dagrun, log_files_to_create, older_than
     pytest.param({
         'log1.txt': datetime(2020, 1, 1),
         'log2.txt': datetime(1999, 12, 12),
-        'log3.txt': datetime.utcnow(),
+        'log3.txt': datetime.now(),
     }, id='2 old, 1 new, no subpaths'),
     pytest.param({
         'log1.txt': datetime(2020, 1, 1),
@@ -112,7 +112,7 @@ def test_check_old_log_files(mocker, fs, dagrun, log_files_to_create, older_than
         'that/other/path/log4.txt': datetime(2020, 1, 1),
     }, id='multiple subpaths'),
 ])
-def test_delete_old_files(fs, airflow_session, dagrun, log_paths):
+def test_delete_old_files(fs, airflow_session, dag_run, log_paths: dict):
     # All additional_files should remain after the task has completed
     fs.create_dir(settings.LOG_DIR)
 
@@ -127,11 +127,11 @@ def test_delete_old_files(fs, airflow_session, dagrun, log_paths):
         value=log_file_names,
         task_id='check_old_log_files',
         dag_id=log_cleanup_dag.dag_id,
-        execution_date=EXECUTION_DATE,
+        run_id=dag_run.run_id,
     )
     ti = TaskInstance(
-        task=dagrun.dag.get_task('delete_old_log_files'),
-        execution_date=dagrun.execution_date,
+        task=dag_run.dag.get_task('delete_old_log_files'),
+        run_id=dag_run.run_id,
     )
     ti.set_state(State.NONE)
     ti.run(ignore_all_deps=True)
