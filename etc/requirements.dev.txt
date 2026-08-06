@@ -1,13 +1,10 @@
 # Airflow
-apache-airflow~=2.10.0
-Flask~=2.2.5
-Flask-SQLAlchemy~=2.5.1
-SQLAlchemy~=1.4.52
+apache-airflow~=3.3.0
+sqlalchemy-utils~=0.42.1
 
 # Testing
-pytest~=8.3.4
-pytest-cov~=6.0.0
-pytest-mock~=3.14.0
-pyfakefs~=5.7.2
-moto~=5.0.22
-testfixtures~8.3.0
+pytest~=9.1.1
+pytest-cov~=7.1.0
+pytest-mock~=3.15.1
+pyfakefs~=6.2.0
+pendulum[test]~=3.2.0

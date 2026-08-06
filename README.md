@@ -25,25 +25,10 @@ pip install --upgrade pip
 pip install -r etc/requirements.dev.txt
 ```
 
-### Unit tests
-#### First-Time Setup
-If Airflow verson ~= 1.x:
+Unit tests may then be run with pytest:
 ```
-airflow initdb
+pytest test
 ```
-
-If Airflow verson >= 2.x:
-```
-airflow db init
-```
-
-Once the Airflow DB has been set up properly, we can run the unit tests:
-```
-export AIRFLOW_HOME=$PWD/src
-export PYTHONPATH=$PWD/src
-pytest test --cov src
-```
-
 
 ## Airflow Log Cleanup
 
