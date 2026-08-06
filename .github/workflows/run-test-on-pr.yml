@@ -1,0 +1,34 @@
+name: Audience Flow Manager Unit Tests
+
+on:
+  pull_request:
+    branches: [ master, develop, feature/*, release/*, hotfix/*]
+
+env:
+  PYTEST_WORKERS: "4"
+
+jobs:
+  build:
+
+    runs-on: [self-hosted, Python3.12]
+
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Set up Python environment
+        run: |
+          pip install -r etc/requirements.dev.txt
+
+      - name: Test - pytest
+        run: |
+          pytest test --cache-clear --junit-xml reports/unittest-results.xml -n $PYTEST_WORKERS
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-results
+          path: reports/unittest-results.xml
+        # Use always() to always run this step to publish test results when there are test failures
+        if: ${{ always() }}
