@@ -1,14 +1,19 @@
 import os
 from datetime import datetime
+from types import SimpleNamespace
+from typing import cast
 
 import pytest
-from airflow.models import TaskInstance, XCom, DagRun
+from airflow.models import DagRun, XCom
+from airflow.providers.standard.operators.python import PythonOperator, ShortCircuitOperator
+from airflow.sdk import Context
+from airflow.sdk.execution_time.task_runner import RuntimeTaskInstance
 from airflow.utils.state import State
 from airflow.utils.types import DagRunType
-from pendulum import DateTime, UTC
+from pendulum import UTC, DateTime
 
 from maintenance_dags import settings
-from maintenance_dags.airflow_log_cleanup import log_cleanup_dag, XCOM_LOG_FILES_KEY
+from maintenance_dags.airflow_log_cleanup import log_cleanup_dag
 
 EXECUTION_DATE = DateTime(2024, 7, 18, 6, tzinfo=UTC)
 
@@ -32,7 +37,7 @@ def dag_run(airflow_session) -> DagRun:
 
 
 @pytest.mark.parametrize('log_files_to_create, older_than_date, expected', [
-    pytest.param({}, datetime(2021, 1, 1), None, id='no files'),
+    pytest.param({}, datetime(2021, 1, 1), [], id='no files'),
     pytest.param(
         {'log1.txt': datetime(2020, 1, 1)},
         datetime(2021, 1, 1),
@@ -58,11 +63,11 @@ def dag_run(airflow_session) -> DagRun:
          'that/log5.txt': datetime(2018, 11, 12),
          },
         datetime(2005, 3, 1),
-        None,
+        [],
         id='files with nothing to delete',
     ),
 ])
-def test_check_old_log_files(mocker, fs, dag_run, log_files_to_create: dict, older_than_date, expected):
+def test_check_old_log_files(mocker, fs, log_files_to_create: dict, older_than_date, expected):
     fs.create_dir(settings.LOG_DIR)
     mocker.patch('maintenance_dags.airflow_log_cleanup.x_days_ago', return_value=older_than_date)
 
@@ -72,26 +77,13 @@ def test_check_old_log_files(mocker, fs, dag_run, log_files_to_create: dict, old
         create_file_with_st_mtime(fs, file_name, creation_timestamp)
         log_files.append(file_name)
 
-    ti = TaskInstance(
-        task=dag_run.dag.get_task('check_old_log_files'),
-        execution_date=dag_run.execution_date,
-    )
-    ti.set_state(State.NONE)
-    ti.run(ignore_all_deps=True)
-
-    xcom_values = XCom.get_one(
-        task_id=ti.task_id,
-        dag_id=ti.dag_id,
-        execution_date=ti.execution_date,
-        key=XCOM_LOG_FILES_KEY,
-    )
-    if expected:
-        expected = [
-            os.path.join(settings.LOG_DIR, file_name)
-            for file_name in expected
-        ]
-    assert xcom_values == expected
-    assert ti.state == State.SUCCESS
+    task: ShortCircuitOperator = log_cleanup_dag.get_task('check_old_log_files')
+    result = task.python_callable(**task.op_kwargs, task=task)
+    expected = [
+        os.path.join(settings.LOG_DIR, file_name)
+        for file_name in expected
+    ]
+    assert sorted(result) == sorted(expected)
 
 
 @pytest.mark.parametrize('log_paths', [
@@ -112,7 +104,7 @@ def test_check_old_log_files(mocker, fs, dag_run, log_files_to_create: dict, old
         'that/other/path/log4.txt': datetime(2020, 1, 1),
     }, id='multiple subpaths'),
 ])
-def test_delete_old_files(fs, airflow_session, dag_run, log_paths: dict):
+def test_delete_old_files(fs, log_paths: dict):
     # All additional_files should remain after the task has completed
     fs.create_dir(settings.LOG_DIR)
 
@@ -122,19 +114,33 @@ def test_delete_old_files(fs, airflow_session, dag_run, log_paths: dict):
         create_file_with_st_mtime(fs, full_path, file_creation_timestamp)
         log_file_names.append(full_path)
 
-    XCom.set(
-        key=XCOM_LOG_FILES_KEY,
-        value=log_file_names,
-        task_id='check_old_log_files',
-        dag_id=log_cleanup_dag.dag_id,
-        run_id=dag_run.run_id,
+    task_id = 'delete_old_log_files'
+    # prepare_for_execution makes a new copy, so rendered templates won't carry over to other tests
+    task: PythonOperator = log_cleanup_dag.get_task(task_id).prepare_for_execution()
+
+    def xcom_pull(task_ids=None, dag_id=None, key=XCom.XCOM_RETURN_KEY, **kwargs):
+        assert task_ids == 'check_old_log_files'
+        assert dag_id in {None, log_cleanup_dag.dag_id}
+        assert key == XCom.XCOM_RETURN_KEY
+        return log_file_names
+
+    ti = SimpleNamespace(
+        xcom_pull=xcom_pull,
+        task=task,
     )
-    ti = TaskInstance(
-        task=dag_run.dag.get_task('delete_old_log_files'),
-        run_id=dag_run.run_id,
+    context = Context(
+        ti=ti,  # noqa
+        task_instance=ti,  # noqa
+        task=task,
     )
-    ti.set_state(State.NONE)
-    ti.run(ignore_all_deps=True)
+    rendered = cast(PythonOperator, RuntimeTaskInstance.render_templates(
+        self=cast(RuntimeTaskInstance, cast(object, ti)),
+        context=context,
+    ))
+    rendered.python_callable(
+        **task.op_kwargs,
+        task=task,
+    )
 
     for file_name in log_file_names:
         assert not os.path.exists(file_name)
