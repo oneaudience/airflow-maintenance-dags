@@ -9,6 +9,15 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 
+[tool.isort]
+balanced_wrapping = true
+combine_as_imports = true
+include_trailing_comma = true
+known_third_party = ["airflow"]
+line_length = 120
+# Hanging Grid Grouped
+multi_line_output=5
+
 [project.urls]
 "Homepage" = "https://github.com/oneaudience/airflow-maintenance-dags"
 
