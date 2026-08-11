@@ -1,5 +1,4 @@
 import re
-from datetime import timedelta
 from types import SimpleNamespace
 from typing import cast
 
@@ -11,11 +10,9 @@ from airflow.sdk import Context, DagRunState
 from airflow.sdk.execution_time.task_runner import RuntimeTaskInstance
 from airflow.sdk.execution_time.xcom import XCom
 from airflow.utils.types import DagRunType
-from dateutil.parser import parse
 from pendulum import UTC, DateTime
 
 from maintenance_dags.airflow_db_cleanup import db_cleanup_dag
-from test import DateTimeRange
 
 EXECUTION_DATE = DateTime(2023, 7, 18, 6, tzinfo=UTC)
 

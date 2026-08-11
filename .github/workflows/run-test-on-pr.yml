@@ -10,7 +10,7 @@ env:
 jobs:
   build:
 
-    runs-on: [self-hosted, Python3.12]
+    runs-on: ubuntu-latest
 
     timeout-minutes: 30
 
@@ -23,7 +23,9 @@ jobs:
 
       - name: Test - pytest
         run: |
-          pytest test --cache-clear --junit-xml reports/unittest-results.xml -n $PYTEST_WORKERS
+          export AIRFLOW_HOME=$PWD/src
+          export PYTHONPATH=src:test
+          pytest test --cache-clear --junit-xml reports/unittest-results.xml
 
       - name: Upload test results
         uses: actions/upload-artifact@v4
