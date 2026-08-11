@@ -23,7 +23,7 @@ jobs:
 
       - name: Test - pytest
         run: |
-          pytest test --cache-clear --junit-xml reports/unittest-results.xml -n $PYTEST_WORKERS
+          pytest test --cache-clear --junit-xml reports/unittest-results.xml
 
       - name: Upload test results
         uses: actions/upload-artifact@v4
