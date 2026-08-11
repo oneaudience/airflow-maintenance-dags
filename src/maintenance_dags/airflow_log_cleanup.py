@@ -6,12 +6,11 @@ import os
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from airflow import DAG
-from airflow.operators.python import PythonOperator, ShortCircuitOperator
+from airflow.providers.standard.operators.python import PythonOperator, ShortCircuitOperator
+from airflow.sdk import DAG
+from pendulum import DateTime
 
-import settings
-
-XCOM_LOG_FILES_KEY = 'log_files_to_delete'
+from maintenance_dags import settings
 
 
 def x_days_ago(dt, num_days):
@@ -28,21 +27,17 @@ def x_days_ago(dt, num_days):
     return dt - timedelta(days=num_days)
 
 
-def check_for_old_log_files(xcom_key, max_age, **context):
+def check_for_old_log_files(max_age: int, *, task) -> list[str]:
     """
     Check if there are log files older than the specified number of days
 
-    :param xcom_key: xcom key to store the files to delete under
     :param max_age: maximum age of a log file in days
-    :param context: context with the Airflow DAG
-    :type xcom_key: str
-    :type max_age: int
-    :return: whether or not there are old log files to delete
-    :rtype: bool
+    :param task: Airflow task
+    :return: whether there are old log files to delete
     """
-    log = context['ti'].log
+    log = task.log
     files_to_delete = []
-    older_than_date = x_days_ago(datetime.utcnow(), max_age)
+    older_than_date = x_days_ago(DateTime.utcnow(), max_age)
 
     log.info(f'Looking for log files older than {older_than_date.isoformat()}')
     # We use os.walk instead of os.listdir because there may be subdirectories
@@ -56,27 +51,14 @@ def check_for_old_log_files(xcom_key, max_age, **context):
 
     if files_to_delete:
         log.info(f'Found {len(files_to_delete)} log files to delete')
-        context['ti'].xcom_push(key=xcom_key, value=files_to_delete)
-        return True
-
-    log.info('No log files found to delete')
-    return False
+    else:
+        log.info('No log files found to delete')
+    return files_to_delete
 
 
-def delete_files(xcom_keys, **context):
-    """
-    Deletes all local files stored in xcom_keys
-
-    :param xcom_keys: xcom key to pull the files to delete from
-    :param context: context with the Airflow DAG
-    :type xcom_keys: list[str]
-    """
-    log = context['ti'].log
-    files_to_delete = []
-    for xcom_key in xcom_keys:
-        xcom_files = context['ti'].xcom_pull(key=xcom_key)
-        if xcom_files:
-            files_to_delete.extend(xcom_files)
+def delete_files(files_to_delete: list[str], *, task):
+    """Deletes all specified local files"""
+    log = task.log
 
     log.info(f'Deleting {len(files_to_delete)} old files')
     for file_path in files_to_delete:
@@ -91,15 +73,14 @@ def delete_files(xcom_keys, **context):
 with DAG(
         dag_id='airflow_log_cleanup',
         start_date=datetime(2021, 9, 1),
-        schedule_interval='@monthly',
+        schedule='@monthly',
         catchup=False,
-        tags=['airflow-maintenance-dags'],
+        tags={'airflow-maintenance-dags'},
 ) as log_cleanup_dag:
     check_old_log_files = ShortCircuitOperator(
         task_id='check_old_log_files',
         python_callable=check_for_old_log_files,
         op_kwargs={
-            'xcom_key': XCOM_LOG_FILES_KEY,
             'max_age': settings.MAX_LOG_FILE_AGE,
         },
     )
@@ -107,7 +88,7 @@ with DAG(
         task_id='delete_old_log_files',
         python_callable=delete_files,
         op_kwargs={
-            'xcom_keys': [XCOM_LOG_FILES_KEY],
+            'files_to_delete': check_old_log_files.output,
         },
     )
 

@@ -7,11 +7,6 @@ A series of DAGs to help maintain and clean up after the operations of an Airflo
     * A maintenance workflow that you can deploy into Airflow to periodically clean out the task logs to avoid those getting too big.
 * db-cleanup
     * A maintenance workflow that you can deploy into Airflow to periodically clean out the DagRun, TaskInstance, Log, XCom, Job DB and SlaMiss entries to avoid having too much data in your Airflow MetaStore.
-* clear-missing-dags
-    * A maintenance workflow that you can deploy into Airflow to periodically clean out entries in the DAG table of which there is no longer a corresponding Python File for it. This ensures that the DAG table doesn't have needless items in it and that the Airflow Web Server displays only those available DAGs.
-* kill-halted-tasks
-    * A maintenance workflow that you can deploy into Airflow to periodically kill off tasks that are running in the background that don't correspond to a running task in the DB.
-    * This is useful because when you kill off a DAG Run or Task through the Airflow Web Server, the task still runs in the background on one of the executors until the task is complete.
 
 
 ## Setup
@@ -25,25 +20,10 @@ pip install --upgrade pip
 pip install -r etc/requirements.dev.txt
 ```
 
-### Unit tests
-#### First-Time Setup
-If Airflow verson ~= 1.x:
+Unit tests may then be run with pytest:
 ```
-airflow initdb
+pytest test
 ```
-
-If Airflow verson >= 2.x:
-```
-airflow db init
-```
-
-Once the Airflow DB has been set up properly, we can run the unit tests:
-```
-export AIRFLOW_HOME=$PWD/src
-export PYTHONPATH=$PWD/src
-pytest test --cov src
-```
-
 
 ## Airflow Log Cleanup
 
