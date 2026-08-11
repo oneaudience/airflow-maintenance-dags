@@ -24,7 +24,7 @@ jobs:
       - name: Test - pytest
         run: |
           export AIRFLOW_HOME=$PWD/src
-          export PYTHONPATH=src
+          export PYTHONPATH=src:test
           pytest test --cache-clear --junit-xml reports/unittest-results.xml
 
       - name: Upload test results
