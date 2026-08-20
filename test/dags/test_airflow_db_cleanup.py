@@ -10,7 +10,7 @@ from airflow.sdk import Context, DagRunState
 from airflow.sdk.execution_time.task_runner import RuntimeTaskInstance
 from airflow.sdk.execution_time.xcom import XCom
 from airflow.utils.types import DagRunType
-from pendulum import UTC, DateTime
+from pendulum import UTC, DateTime, parse
 
 from maintenance_dags.airflow_db_cleanup import db_cleanup_dag
 
@@ -77,4 +77,12 @@ def test_airflow_db_cleanup():
     )
 
     bash_command = re.split(r'\s+', cast(BashOperator, rendered).bash_command)
-    assert bash_command == ['airflow', 'db', 'clean', '--clean-before-timestamp', repr(timestamp)]
+    # The CLI parser will return a namespace including the subcommand,
+    # but not the command, so check the command directly.
+    assert bash_command[:2] == ['airflow', 'db']
+    from airflow.cli import cli_parser
+    args = cli_parser.get_parser().parse_args(bash_command[1:])
+    assert args.subcommand == 'clean'
+    assert args.clean_before_timestamp == parse(timestamp)
+    assert args.yes
+    assert not args.dry_run

@@ -3,6 +3,7 @@ from datetime import datetime
 from types import SimpleNamespace
 from typing import cast
 
+import pendulum
 import pytest
 from airflow.models import DagRun, XCom
 from airflow.providers.standard.operators.python import PythonOperator, ShortCircuitOperator
@@ -36,11 +37,11 @@ def dag_run(airflow_session) -> DagRun:
     )
 
 
-@pytest.mark.parametrize('log_files_to_create, older_than_date, expected', [
-    pytest.param({}, datetime(2021, 1, 1), [], id='no files'),
+@pytest.mark.parametrize('log_files_to_create, fake_now, expected', [
+    pytest.param({}, DateTime.create(2021, 1, 31), [], id='no files'),
     pytest.param(
         {'log1.txt': datetime(2020, 1, 1)},
-        datetime(2021, 1, 1),
+        DateTime.create(2021, 1, 31),
         ['log1.txt'],
         id='single file',
     ),
@@ -51,7 +52,7 @@ def dag_run(airflow_session) -> DagRun:
          'that/log4.txt': datetime(2021, 3, 1),
          'that/log5.txt': datetime(2018, 11, 12),
          },
-        datetime(2020, 3, 1),
+        DateTime.create(2020, 3, 31),
         ['log1.txt', 'log2.txt', 'this/log3.txt', 'that/log5.txt'],
         id='multiple files with subpaths',
     ),
@@ -62,14 +63,13 @@ def dag_run(airflow_session) -> DagRun:
          'that/log4.txt': datetime(2021, 3, 1),
          'that/log5.txt': datetime(2018, 11, 12),
          },
-        datetime(2005, 3, 1),
+        DateTime.create(2005, 3, 31),
         [],
         id='files with nothing to delete',
     ),
 ])
-def test_check_old_log_files(mocker, fs, log_files_to_create: dict, older_than_date, expected):
+def test_check_old_log_files(fs, log_files_to_create: dict, fake_now, expected):
     fs.create_dir(settings.LOG_DIR)
-    mocker.patch('maintenance_dags.airflow_log_cleanup.x_days_ago', return_value=older_than_date)
 
     log_files = []
     for file_name, creation_timestamp in log_files_to_create.items():
@@ -78,7 +78,8 @@ def test_check_old_log_files(mocker, fs, log_files_to_create: dict, older_than_d
         log_files.append(file_name)
 
     task: ShortCircuitOperator = log_cleanup_dag.get_task('check_old_log_files')
-    result = task.python_callable(**task.op_kwargs, task=task)
+    with pendulum.travel_to(fake_now, freeze=True):
+        result = task.python_callable(**task.op_kwargs, task=task)
     expected = [
         os.path.join(settings.LOG_DIR, file_name)
         for file_name in expected
