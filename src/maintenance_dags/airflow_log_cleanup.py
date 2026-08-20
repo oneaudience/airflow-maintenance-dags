@@ -3,7 +3,6 @@ An Airflow maintenance DAG that cleans out the local Airflow log files older tha
 `settings.MAX_LOG_fILE_AGE`.
 """
 import os
-from datetime import datetime, timedelta
 from pathlib import Path
 
 from airflow.providers.standard.operators.python import PythonOperator, ShortCircuitOperator
@@ -11,20 +10,6 @@ from airflow.sdk import DAG
 from pendulum import DateTime
 
 from maintenance_dags import settings
-
-
-def x_days_ago(dt, num_days):
-    """
-    Returns a new date that is num_months before the specified date
-
-    :param dt: date to modify
-    :param num_days: number of days to subtract
-    :type dt: datetime
-    :type num_days: int
-    :return: dt - num_months
-    :rtype: datetime
-    """
-    return dt - timedelta(days=num_days)
 
 
 def check_for_old_log_files(max_age: int, *, task) -> list[str]:
@@ -37,7 +22,7 @@ def check_for_old_log_files(max_age: int, *, task) -> list[str]:
     """
     log = task.log
     files_to_delete = []
-    older_than_date = x_days_ago(DateTime.utcnow(), max_age)
+    older_than_date = DateTime.utcnow().subtract(days=max_age)
 
     log.info(f'Looking for log files older than {older_than_date.isoformat()}')
     # We use os.walk instead of os.listdir because there may be subdirectories
@@ -45,7 +30,7 @@ def check_for_old_log_files(max_age: int, *, task) -> list[str]:
     for root, _, files in os.walk(settings.LOG_DIR):
         for filename in files:
             file_name = os.path.join(root, filename)
-            last_modified_time = datetime.fromtimestamp(Path(file_name).stat().st_mtime)
+            last_modified_time = DateTime.fromtimestamp(Path(file_name).stat().st_mtime)
             if last_modified_time <= older_than_date:
                 files_to_delete.append(file_name)
 
@@ -72,7 +57,7 @@ def delete_files(files_to_delete: list[str], *, task):
 
 with DAG(
         dag_id='airflow_log_cleanup',
-        start_date=datetime(2021, 9, 1),
+        start_date=DateTime.create(2021, 9, 1),
         schedule='@monthly',
         catchup=False,
         tags={'airflow-maintenance-dags'},

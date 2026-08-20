@@ -36,5 +36,5 @@ with DAG(
     )
     clean_db = BashOperator(
         task_id='clean_db',
-        bash_command=f"airflow db clean --clean-before-timestamp '{calc_max_date.output}'"
+        bash_command=f"airflow db clean --clean-before-timestamp '{calc_max_date.output}' --yes"
     )
