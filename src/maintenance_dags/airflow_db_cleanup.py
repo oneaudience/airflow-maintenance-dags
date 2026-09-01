@@ -38,3 +38,5 @@ with DAG(
         task_id='clean_db',
         bash_command=f"airflow db clean --clean-before-timestamp '{calc_max_date.output}' --yes"
     )
+
+    calc_max_date >> clean_db
